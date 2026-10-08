@@ -1,24 +1,49 @@
 {
   "expo": {
-    "name": "bdk-admin",
-    "slug": "bdk-admin",
+    "name": "DK Bible Trivia",
+    "slug": "bdk-trivia",
+    "scheme": "bdktrivia",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/bdklogo.jpg",
     "userInterfaceStyle": "light",
     "ios": {
-      "supportsTablet": true
+      "bundleIdentifier": "com.bdk.bibletrivia",
+      "supportsTablet": true,
+      "icon": "./assets/bdklogo.jpg",
+      "infoPlist": {
+        "NSPhotoLibraryUsageDescription": "Choose a picture for a Bible trivia question.",
+        "NSCameraUsageDescription": "Take a picture for a Bible trivia question."
+      }
     },
     "android": {
+      "package": "com.bdk.bibletrivia",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundColor": "#F5F0E8",
+        "foregroundImage": "./assets/bdklogo.jpg",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       }
     },
     "web": {
-      "favicon": "./assets/favicon.png"
-    }
+      "bundler": "metro",
+      "favicon": "./assets/bdklogo.jpg"
+    },
+    "splash": {
+      "backgroundColor": "#F5F0E8",
+      "image": "./assets/bdklogo.jpg",
+      "resizeMode": "contain"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Choose a picture for a Bible trivia question.",
+          "cameraPermission": "Take a picture for a Bible trivia question.",
+          "microphonePermission": false
+        }
+      ]
+    ]
   }
 }

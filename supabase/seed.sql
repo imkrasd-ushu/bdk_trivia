@@ -1,0 +1,2 @@
+-- Seed data intentionally left empty for now.
+-- Add seed rows here when needed for local or preview database setup.
