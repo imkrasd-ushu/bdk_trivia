@@ -18,6 +18,11 @@ export default function LoginScreen() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
 
+  function goBackOrHome() {
+    if (router.canGoBack()) router.back();
+    else router.replace('/');
+  }
+
   async function submit() {
     setBusy(true);
     setMessage('');
@@ -25,10 +30,10 @@ export default function LoginScreen() {
       if (mode === 'up') {
         const result = await signUp(email, password);
         if (!result.session) setMessage('Check your email to confirm your account, then log in.');
-        else router.back();
+        else goBackOrHome();
       } else {
         await signIn(email, password);
-        router.back();
+        goBackOrHome();
       }
     } catch (error) { setMessage(error.message); }
     finally { setBusy(false); }
@@ -50,7 +55,7 @@ export default function LoginScreen() {
         {!configured && <ErrorText>Supabase configuration is missing. Set the values in `.env`.</ErrorText>}
         <Button title={mode === 'up' ? 'Create account' : 'Log in'} onPress={submit} loading={busy} disabled={!configured || !email.trim() || password.length < 6} style={{ marginTop: 14 }} />
         <Pressable onPress={() => { setMode(mode === 'up' ? 'in' : 'up'); setMessage(''); }} style={styles.switch}><Text style={styles.switchText}>{mode === 'up' ? 'I already have an account' : 'Create an account'}</Text></Pressable>
-        <Button title="Back" variant="soft" onPress={() => router.back()} />
+        <Button title="Back" variant="soft" onPress={goBackOrHome} />
       </Card>
     </Screen>
   );
