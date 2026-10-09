@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import NetInfo from '@react-native-community/netinfo';
 import { Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import Button from '../../components/Button';
@@ -7,6 +8,7 @@ import Card from '../../components/Card';
 import Screen from '../../components/Screen';
 import { Heading, Eyebrow } from '../../components/Heading';
 import { LEVELS, TRIVIA_CATEGORIES, DEFAULT_CATEGORY, DEFAULT_QUESTION_TIMEOUT, QUESTION_TIMEOUT_OPTIONS, MODULE_LEVEL_COUNT, PASS_PERCENT_REQUIRED, COURSE_MODULES } from '../../config/constants';
+import { getAvailableCategories, getOfflineSyncStatus, syncCatalog } from '../../services/offlineService';
 import { C } from '../../theme';
 import { createEmptyProgress, getModuleStageStatus, loadProgressForCategory, MODULE_SEQUENCE } from '../../utils/progression';
 
@@ -19,6 +21,38 @@ export default function LevelScreen() {
   const [category, setCategory] = useState(DEFAULT_CATEGORY);
   const [module, setModule] = useState('easy');
   const [progress, setProgress] = useState(createEmptyProgress());
+  const [categories, setCategories] = useState(() => Object.entries(TRIVIA_CATEGORIES).map(([key, value], sort_order) => ({ key, ...value, sort_order })));
+  const [syncStatus, setSyncStatus] = useState({ syncedAt: null, questionCount: 0, pendingGames: 0 });
+  const [syncing, setSyncing] = useState(false);
+  const [syncMessage, setSyncMessage] = useState('');
+
+  const refreshOfflinePack = useCallback(async (showMessage = false) => {
+    setSyncing(true);
+    setSyncMessage('');
+    try {
+      const catalog = await syncCatalog();
+      setCategories(catalog.categories);
+      setSyncStatus(await getOfflineSyncStatus());
+      if (showMessage) setSyncMessage(`Downloaded ${catalog.questions.length} published questions.`);
+    } catch (error) {
+      const [available, status] = await Promise.all([getAvailableCategories(), getOfflineSyncStatus()]);
+      setCategories(available);
+      setSyncStatus(status);
+      if (showMessage) setSyncMessage(status.questionCount ? 'Offline pack is ready. Connect to update it.' : error.message);
+    } finally {
+      setSyncing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    getAvailableCategories().then(value => { if (active) setCategories(value); });
+    getOfflineSyncStatus().then(value => { if (active) setSyncStatus(value); });
+    const unsubscribe = NetInfo.addEventListener(state => {
+      if (state.isConnected && state.isInternetReachable !== false) void refreshOfflinePack();
+    });
+    return () => { active = false; unsubscribe(); };
+  }, [refreshOfflinePack]);
 
   useEffect(() => {
     let active = true;
@@ -52,11 +86,19 @@ export default function LevelScreen() {
       <Heading>Pick a category and level</Heading>
       <Text style={styles.intro}>Each module has 100 questions in 10 levels. You need {PASS_PERCENT_REQUIRED}% to unlock the next level, then the next module.</Text>
 
+      <Card style={{ padding: 14, marginBottom: 10 }}>
+        <Text style={styles.progressTitle}>Offline quiz pack</Text>
+        <Text style={styles.progressDetail}>{syncStatus.questionCount ? `${syncStatus.questionCount} questions downloaded` : 'No questions downloaded yet'}</Text>
+        {!!syncStatus.pendingGames && <Text style={styles.progressDetail}>{syncStatus.pendingGames} completed game(s) waiting to sync</Text>}
+        {!!syncMessage && <Text style={{ color: C.green, marginTop: 6 }}>{syncMessage}</Text>}
+        <Button title={syncing ? 'Updating…' : 'Download / update'} variant="soft" onPress={() => refreshOfflinePack(true)} loading={syncing} style={{ marginTop: 10 }} />
+      </Card>
+
       <Text style={styles.section}>Category</Text>
       <View style={styles.categoryRow}>
-        {Object.entries(TRIVIA_CATEGORIES).map(([key, item]) => (
-          <Pressable key={key} onPress={() => setCategory(key)} style={[styles.categoryPill, category === key && styles.categoryPillActive]}>
-            <Text style={[styles.categoryText, category === key && styles.categoryTextActive]}>{item.icon} {item.label}</Text>
+        {categories.map(item => (
+          <Pressable key={item.key} onPress={() => setCategory(item.key)} style={[styles.categoryPill, category === item.key && styles.categoryPillActive]}>
+            <Text style={[styles.categoryText, category === item.key && styles.categoryTextActive]}>{item.icon || '✦'} {item.label}</Text>
           </Pressable>
         ))}
       </View>

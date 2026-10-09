@@ -51,7 +51,7 @@ export default function GameScreen() {
         total: totalQuestions,
       });
       await AsyncStorage.multiSet([
-        ['bdk-last-result', JSON.stringify({ result, lessons, level, stage: stageNumber, timer, refs: state.refs, progression })],
+        ['bdk-last-result', JSON.stringify({ sid: state.sid, result, lessons, level, stage: stageNumber, timer, refs: state.refs, progression })],
         ['bdk-last-refs', JSON.stringify(state.refs)],
       ]);
       if (!result.saved) await AsyncStorage.setItem('bdk-pending', JSON.stringify({ sid: state.sid, score: result.score }));

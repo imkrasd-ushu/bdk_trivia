@@ -50,6 +50,17 @@ export async function importQuestions(questions) {
   return data;
 }
 
+export async function listCategories() {
+  const { data, error } = await requireSupabase().from('trivia_categories')
+    .select('key,label,icon,sort_order').eq('is_active', true).order('sort_order');
+  if (error) throw error;
+  return data || [];
+}
+
+export async function createCategory(label, icon = '✦') {
+  return rpc('create_trivia_category', { p_label: label, p_icon: icon });
+}
+
 export const getPoolCounts = () => rpc('admin_pool_counts');
 export const getAdminDashboard = () => rpc('admin_dashboard');
 

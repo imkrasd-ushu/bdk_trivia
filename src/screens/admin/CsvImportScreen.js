@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import { File as ExpoFile } from 'expo-file-system';
@@ -8,7 +8,7 @@ import Card from '../../components/Card';
 import Screen from '../../components/Screen';
 import { ErrorText, Heading } from '../../components/Heading';
 import { DEFAULT_CATEGORY, TRIVIA_CATEGORIES } from '../../config/constants';
-import { importQuestions } from '../../services/adminService';
+import { importQuestions, listCategories } from '../../services/adminService';
 import { parseCSV, validateQuestionRows } from '../../utils/csv';
 import { C } from '../../theme';
 
@@ -21,6 +21,13 @@ export default function CsvImportScreen() {
   const [errors, setErrors] = useState([]);
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
+  const [categories, setCategories] = useState(() => Object.entries(TRIVIA_CATEGORIES).map(([key, value]) => ({ key, ...value })));
+
+  useEffect(() => {
+    let active = true;
+    listCategories().then(value => { if (active && value.length) setCategories(value); }).catch(() => {});
+    return () => { active = false; };
+  }, []);
 
   async function pickFile() {
     setMessage('');
@@ -42,7 +49,7 @@ export default function CsvImportScreen() {
     setMessage('');
     try {
       await importQuestions(ready.map(question => ({ ...question, category })));
-      setMessage(`Imported ${ready.length} questions as drafts into ${TRIVIA_CATEGORIES[category]?.label || 'this category'}.`);
+      setMessage(`Imported ${ready.length} questions as drafts into ${categories.find(item => item.key === category)?.label || 'this category'}.`);
       setReady([]);
     } catch (error) { setMessage(error.message); }
     finally { setBusy(false); }
@@ -54,7 +61,7 @@ export default function CsvImportScreen() {
       <Text style={styles.copy}>Choose a category and then pick a CSV file. Questions import as drafts so they can be checked before publishing.</Text>
       <Card>
         <Text style={styles.section}>Category</Text>
-        <View style={styles.filters}>{Object.entries(TRIVIA_CATEGORIES).map(([key, item]) => <Pressable key={key} onPress={() => setCategory(key)} style={[styles.filter, category === key && styles.filterSelected]}><Text style={[styles.filterText, category === key && styles.filterSelectedText]}>{item.icon} {item.label}</Text></Pressable>)}</View>
+        <View style={styles.filters}>{categories.map(item => <Pressable key={item.key} onPress={() => setCategory(item.key)} style={[styles.filter, category === item.key && styles.filterSelected]}><Text style={[styles.filterText, category === item.key && styles.filterSelectedText]}>{item.icon || '✦'} {item.label}</Text></Pressable>)}</View>
         <Text style={styles.section}>Required columns</Text>
         <Text selectable style={styles.code}>difficulty, character, question, option_a, option_b, option_c, option_d, correct_option, explanation, bible_reference</Text>
         <Text style={styles.copy}>Use easy, medium or hard; correct_option must be a, b, c or d. The optional hint column is also accepted.</Text>

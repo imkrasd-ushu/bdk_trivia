@@ -7,7 +7,7 @@ import Card from '../../components/Card';
 import Screen from '../../components/Screen';
 import { ErrorText, Heading } from '../../components/Heading';
 import { DEFAULT_CATEGORY, TRIVIA_CATEGORIES, normalizeDifficulty } from '../../config/constants';
-import { getQuestion, saveQuestion, uploadQuestionImage } from '../../services/adminService';
+import { getQuestion, listCategories, saveQuestion, uploadQuestionImage } from '../../services/adminService';
 import { C } from '../../theme';
 
 const EMPTY = { category: DEFAULT_CATEGORY, difficulty: 'easy', character: '', question: '', option_a: '', option_b: '', option_c: '', option_d: '', correct_option: 'a', explanation: '', bible_reference: '', hint: '', image_url: '', is_published: false };
@@ -26,6 +26,13 @@ export default function QuizFormScreen() {
   const [imageBusy, setImageBusy] = useState(false);
   const [error, setError] = useState('');
   const [fieldErrors, setFieldErrors] = useState({});
+  const [categories, setCategories] = useState(() => Object.entries(TRIVIA_CATEGORIES).map(([key, value]) => ({ key, ...value })));
+
+  useEffect(() => {
+    let active = true;
+    listCategories().then(value => { if (active && value.length) setCategories(value); }).catch(() => {});
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
     if (!id) return;
@@ -72,7 +79,7 @@ export default function QuizFormScreen() {
       {!!error && <ErrorText>{error}</ErrorText>}
       <Card>
         <Text style={styles.label}>Category</Text>
-        <View style={styles.choices}>{Object.entries(TRIVIA_CATEGORIES).map(([key, item]) => <Pressable key={key} onPress={() => setField('category', key)} style={[styles.choice, form.category === key && styles.choiceSelected]}><Text style={[styles.choiceText, form.category === key && styles.choiceSelectedText]}>{item.icon} {item.label}</Text></Pressable>)}</View>
+        <View style={styles.choices}>{categories.map(item => <Pressable key={item.key} onPress={() => setField('category', item.key)} style={[styles.choice, form.category === item.key && styles.choiceSelected]}><Text style={[styles.choiceText, form.category === item.key && styles.choiceSelectedText]}>{item.icon || '✦'} {item.label}</Text></Pressable>)}</View>
         <Text style={styles.label}>Level</Text>
         <View style={styles.choices}>{['easy', 'medium', 'hard'].map(level => <Pressable key={level} onPress={() => setField('difficulty', level)} style={[styles.choice, form.difficulty === level && styles.choiceSelected]}><Text style={[styles.choiceText, form.difficulty === level && styles.choiceSelectedText]}>{level}</Text></Pressable>)}</View>
         {FIELDS.map(([key, label]) => <View key={key}>

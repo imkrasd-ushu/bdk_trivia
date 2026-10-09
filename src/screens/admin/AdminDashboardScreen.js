@@ -7,7 +7,7 @@ import Card from '../../components/Card';
 import Screen from '../../components/Screen';
 import { ErrorText, Heading, Eyebrow } from '../../components/Heading';
 import { COURSE_MODULES, DEFAULT_CATEGORY, LEVELS, TRIVIA_CATEGORIES } from '../../config/constants';
-import { getAdminDashboard, getPoolCounts, listQuestions, setQuestionPublished, deleteQuestion } from '../../services/adminService';
+import { getAdminDashboard, getPoolCounts, listCategories, listQuestions, setQuestionPublished, deleteQuestion } from '../../services/adminService';
 import { C } from '../../theme';
 
 const FILTER_LEVELS = ['', 'easy', 'medium', 'hard'];
@@ -16,6 +16,7 @@ const FILTER_STATUS = [['', 'All'], ['published', 'Published'], ['draft', 'Draft
 export default function AdminDashboardScreen() {
   const router = useRouter();
   const [rows, setRows] = useState([]);
+  const [categories, setCategories] = useState(() => Object.entries(TRIVIA_CATEGORIES).map(([key, value]) => ({ key, ...value })));
   const [counts, setCounts] = useState([]);
   const [dashboard, setDashboard] = useState(null);
   const [category, setCategory] = useState('all');
@@ -25,17 +26,18 @@ export default function AdminDashboardScreen() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
-  const categoryOptions = Object.entries(TRIVIA_CATEGORIES);
+  const categoryOptions = useMemo(() => categories.map(item => [item.key, item]), [categories]);
 
   const refresh = useCallback(async () => {
     setBusy(true);
     try {
-      const [questions, pool, analytics] = await Promise.all([
-        listQuestions({ difficulty, status, query, category }), getPoolCounts(), getAdminDashboard(),
+      const [questions, pool, analytics, categoryRows] = await Promise.all([
+        listQuestions({ difficulty, status, query, category }), getPoolCounts(), getAdminDashboard(), listCategories(),
       ]);
       setRows(questions);
       setCounts(pool);
       setDashboard(analytics);
+      if (categoryRows.length) setCategories(categoryRows);
       setError('');
     } catch (reason) { setError(reason.message); }
     finally { setBusy(false); }
@@ -49,7 +51,7 @@ export default function AdminDashboardScreen() {
     return { key, meta, total, published };
   }), [categoryOptions, rows]);
 
-  const activeCategoryLabel = category === 'all' ? 'All categories' : TRIVIA_CATEGORIES[category]?.label || 'Category';
+  const activeCategoryLabel = category === 'all' ? 'All categories' : categories.find(item => item.key === category)?.label || 'Category';
   const publishedCount = level => Number(counts.find(count => count.difficulty === level)?.published || 0);
   const completionRate = dashboard?.games_started ? Math.round(dashboard.games_completed / dashboard.games_started * 100) : 0;
   const levelCards = ['easy', 'medium', 'hard'].map(level => ({
@@ -120,6 +122,7 @@ export default function AdminDashboardScreen() {
 
           <Button title="New question" onPress={() => openAddQuestion()} style={styles.primaryAction} />
           <Button title="Import CSV" variant="soft" onPress={() => router.push({ pathname: '/admin/csv-import', params: { category: category === 'all' ? DEFAULT_CATEGORY : category } })} style={styles.primaryAction} />
+          <Button title="Manage categories" variant="soft" onPress={() => router.push('/admin/categories')} style={styles.primaryAction} />
 
           <Text style={styles.sideLabel}>Categories</Text>
           <Pressable key="all" onPress={() => setCategory('all')} style={[styles.sideItem, category === 'all' && styles.sideItemSelected]}>
@@ -227,7 +230,7 @@ export default function AdminDashboardScreen() {
             <Card key={row.id} style={styles.questionCard}>
               <View style={styles.questionTop}>
                 <View style={styles.questionTitleWrap}>
-                  <Text style={styles.questionCategory}>{TRIVIA_CATEGORIES[row.category]?.label || row.category}</Text>
+                  <Text style={styles.questionCategory}>{categories.find(item => item.key === row.category)?.label || row.category}</Text>
                   <Text style={styles.questionCharacter}>{row.character}</Text>
                 </View>
                 <View style={[styles.statusPill, row.is_published ? styles.statusPillLive : styles.statusPillDraft]}>
