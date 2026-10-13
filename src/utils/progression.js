@@ -1,5 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import NetInfo from '@react-native-community/netinfo';
 import { DEFAULT_CATEGORY } from '../config/constants';
+import { supabase } from '../services/supabase';
 
 export const MODULE_SEQUENCE = ['easy', 'medium', 'hard'];
 
@@ -30,19 +32,51 @@ export function createEmptyProgress() {
 }
 
 export async function loadProgressForCategory(category = DEFAULT_CATEGORY) {
+  let progress;
   try {
     const raw = await AsyncStorage.getItem('bdk-module-progress');
-    if (!raw) return createEmptyProgress();
-    const parsed = JSON.parse(raw);
+    const parsed = raw ? JSON.parse(raw) : {};
     const saved = parsed?.[category] || createEmptyProgress();
-    return {
+    progress = {
       easy: { ...createDefaultModuleState(), ...(saved.easy || {}) },
       medium: { ...createDefaultModuleState(), unlockedLevel: 0, ...(saved.medium || {}) },
       hard: { ...createDefaultModuleState(), unlockedLevel: 0, ...(saved.hard || {}) },
     };
   } catch {
-    return createEmptyProgress();
+    progress = createEmptyProgress();
   }
+
+  try {
+    const connection = await NetInfo.fetch();
+    if (supabase && connection.isConnected && connection.isInternetReachable !== false) {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        const { data, error } = await supabase.from('trivia_user_level_progress')
+          .select('module,unlocked_level,completed_levels,last_percent,last_stage,is_complete,reward,certificate')
+          .eq('category', category);
+        if (!error) {
+          for (const row of data || []) {
+            const previous = progress[row.module] || createDefaultModuleState();
+            progress[row.module] = {
+              ...previous,
+              unlockedLevel: Math.max(Number(previous.unlockedLevel || 0), Number(row.unlocked_level || 0)),
+              completedLevels: [...new Set([...(previous.completedLevels || []), ...(row.completed_levels || [])])].sort((a, b) => a - b),
+              lastPercent: row.last_percent,
+              lastStage: row.last_stage,
+              isComplete: Boolean(previous.isComplete || row.is_complete),
+              reward: row.reward || previous.reward,
+              certificate: row.certificate || previous.certificate,
+            };
+          }
+          await saveProgressForCategory(category, progress);
+        }
+      }
+    }
+  } catch {
+    // Keep locally saved progression when offline or not signed in.
+  }
+
+  return progress;
 }
 
 export async function saveProgressForCategory(category, value) {
@@ -91,6 +125,24 @@ export async function recordLevelProgress({ category = DEFAULT_CATEGORY, module,
 
   current[module] = moduleState;
   await saveProgressForCategory(category, current);
+
+  try {
+    const connection = await NetInfo.fetch();
+    if (supabase && connection.isConnected && connection.isInternetReachable !== false) {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        await supabase.rpc('record_level_progress', {
+          p_category: category,
+          p_module: module,
+          p_stage: Number(stage),
+          p_correct: Number(correct),
+          p_total: Number(total),
+        });
+      }
+    }
+  } catch {
+    // Keep the local result even if account sync is unavailable.
+  }
 
   return {
     percent,

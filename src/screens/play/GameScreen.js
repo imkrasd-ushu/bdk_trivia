@@ -18,7 +18,7 @@ export default function GameScreen() {
   const timed = timer !== '0';
   const router = useRouter();
   const timeoutSeconds = Number(timeLimit || SECONDS_PER_QUESTION);
-  const { state, answer, next } = useGame(level, timed, category || undefined, timeoutSeconds);
+  const { state, answer, next } = useGame(level, timed, category || undefined, timeoutSeconds, Number(stage) || 1);
   const [finishing, setFinishing] = useState(false);
   const question = state.qs[state.i];
   const feedback = state.feedback;

@@ -67,11 +67,124 @@ begin
 end;
 $$;
 
+create table if not exists public.trivia_user_level_progress (
+  user_id uuid not null references auth.users(id) on delete cascade,
+  category text not null references public.trivia_categories(key) on update cascade on delete cascade,
+  module text not null check (module in ('easy', 'medium', 'hard')),
+  unlocked_level integer not null default 0,
+  completed_levels integer[] not null default '{}',
+  last_percent integer not null default 0,
+  last_stage integer not null default 0,
+  is_complete boolean not null default false,
+  reward text,
+  certificate text,
+  updated_at timestamptz not null default now(),
+  primary key (user_id, category, module)
+);
+
+alter table public.trivia_user_level_progress enable row level security;
+drop policy if exists trivia_user_level_progress_self on public.trivia_user_level_progress;
+create policy trivia_user_level_progress_self on public.trivia_user_level_progress
+for select using (user_id = auth.uid());
+grant select on public.trivia_user_level_progress to authenticated;
+grant select on public.trivia_categories, public.trivia_questions to anon, authenticated;
+
+create or replace function public.record_level_progress(
+  p_category text,
+  p_module text,
+  p_stage integer,
+  p_correct integer,
+  p_total integer
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_percent integer;
+  v_passed boolean;
+  v_reward text;
+  v_certificate text;
+  v_row public.trivia_user_level_progress;
+begin
+  if auth.uid() is null then raise exception 'Sign in to save course progress'; end if;
+  if p_module not in ('easy', 'medium', 'hard') or p_stage < 1 or p_stage > 10 then
+    raise exception 'Invalid course level';
+  end if;
+  if p_total <= 0 or p_correct < 0 or p_correct > p_total then
+    raise exception 'Invalid score';
+  end if;
+  if not exists (select 1 from public.trivia_categories where key = p_category) then
+    raise exception 'Category not found';
+  end if;
+
+  v_percent := round(p_correct::numeric * 100 / p_total)::integer;
+  v_passed := v_percent >= 85;
+  v_reward := case p_module when 'easy' then 'Crown of Courage' when 'medium' then 'Crown of Wisdom' else 'Crown of Faith' end;
+  v_certificate := case p_module when 'easy' then 'Easy Certificate' when 'medium' then 'Medium Certificate' else 'Category Certificate' end;
+
+  insert into public.trivia_user_level_progress (
+    user_id, category, module, unlocked_level, completed_levels, last_percent, last_stage,
+    is_complete, reward, certificate
+  )
+  values (
+    auth.uid(), p_category, p_module,
+    case when p_module = 'easy' then 1 else 0 end,
+    case when v_passed then array[p_stage] else '{}'::integer[] end,
+    v_percent, p_stage, v_passed and p_stage = 10,
+    case when v_passed then v_reward end,
+    case when v_passed and p_stage = 10 then v_certificate end
+  )
+  on conflict (user_id, category, module) do update
+  set unlocked_level = greatest(
+        public.trivia_user_level_progress.unlocked_level,
+        case when v_passed then least(10, p_stage + 1) else 0 end
+      ),
+      completed_levels = array(
+        select distinct level_value
+        from unnest(public.trivia_user_level_progress.completed_levels ||
+          case when v_passed then array[p_stage] else '{}'::integer[] end) as completed(level_value)
+        order by level_value
+      ),
+      last_percent = excluded.last_percent,
+      last_stage = excluded.last_stage,
+      is_complete = public.trivia_user_level_progress.is_complete or excluded.is_complete,
+      reward = coalesce(excluded.reward, public.trivia_user_level_progress.reward),
+      certificate = coalesce(excluded.certificate, public.trivia_user_level_progress.certificate),
+      updated_at = now()
+  returning * into v_row;
+
+  if v_row.is_complete and p_module = 'easy' then
+    insert into public.trivia_user_level_progress (user_id, category, module, unlocked_level)
+    values (auth.uid(), p_category, 'medium', 1)
+    on conflict (user_id, category, module) do update
+    set unlocked_level = greatest(public.trivia_user_level_progress.unlocked_level, 1);
+  elsif v_row.is_complete and p_module = 'medium' then
+    insert into public.trivia_user_level_progress (user_id, category, module, unlocked_level)
+    values (auth.uid(), p_category, 'hard', 1)
+    on conflict (user_id, category, module) do update
+    set unlocked_level = greatest(public.trivia_user_level_progress.unlocked_level, 1);
+  end if;
+
+  return jsonb_build_object(
+    'percent', v_percent,
+    'passed', v_passed,
+    'stage', p_stage,
+    'module', p_module,
+    'moduleComplete', v_row.is_complete,
+    'reward', v_row.reward,
+    'certificate', v_row.certificate
+  );
+end;
+$$;
+
 create or replace function public.sync_offline_game(
   p_client_game_id text,
   p_category text,
   p_difficulty text,
   p_timer boolean,
+  p_stage integer,
   p_answers jsonb
 )
 returns jsonb
@@ -108,6 +221,9 @@ begin
   end if;
   if p_difficulty not in ('easy', 'medium', 'hard') then
     raise exception 'Invalid difficulty';
+  end if;
+  if p_stage < 1 or p_stage > 10 then
+    raise exception 'Invalid course level';
   end if;
   if jsonb_typeof(p_answers) <> 'array' or jsonb_array_length(p_answers) <> 10 then
     raise exception 'An offline game must contain exactly 10 answers';
@@ -217,6 +333,8 @@ begin
       stars_earned = public.trivia_user_stats.stars_earned + excluded.stars_earned,
       updated_at = now();
 
+  perform public.record_level_progress(p_category, p_difficulty, p_stage, v_correct, v_total);
+
   v_result := jsonb_build_object(
     'score', v_score,
     'correct', v_correct,
@@ -235,8 +353,10 @@ end;
 $$;
 
 revoke all on function public.create_trivia_category(text, text) from public;
-revoke all on function public.sync_offline_game(text, text, text, boolean, jsonb) from public;
+revoke all on function public.record_level_progress(text, text, integer, integer, integer) from public;
+revoke all on function public.sync_offline_game(text, text, text, boolean, integer, jsonb) from public;
 grant execute on function public.create_trivia_category(text, text) to authenticated;
-grant execute on function public.sync_offline_game(text, text, text, boolean, jsonb) to authenticated;
+grant execute on function public.record_level_progress(text, text, integer, integer, integer) to authenticated;
+grant execute on function public.sync_offline_game(text, text, text, boolean, integer, jsonb) to authenticated;
 
 notify pgrst, 'reload schema';

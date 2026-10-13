@@ -2,7 +2,7 @@ import { CATEGORY, normalizeDifficulty } from '../config/constants';
 import { rpc } from './supabase';
 import { answerOfflineGame, claimOfflineGame, finishOfflineGame, getCachedCatalog, getOfflineGameLessons, isOfflineSession, startOfflineGame, syncCatalog } from './offlineService';
 
-export async function startGame(difficulty, timer = true, category = CATEGORY) {
+export async function startGame(difficulty, timer = true, category = CATEGORY, stage = 1) {
   const normalizedDifficulty = normalizeDifficulty(difficulty);
   let catalog = await getCachedCatalog();
   const hasEnoughCachedQuestions = () => (catalog?.questions || []).filter(question => question.category === category && question.difficulty === normalizedDifficulty).length >= 10;
@@ -11,7 +11,7 @@ export async function startGame(difficulty, timer = true, category = CATEGORY) {
     try { catalog = await syncCatalog(); }
     catch { /* Use the remote game RPC if no offline catalog can be downloaded. */ }
   }
-  if (hasEnoughCachedQuestions()) return startOfflineGame(category, normalizedDifficulty, timer);
+  if (hasEnoughCachedQuestions()) return startOfflineGame(category, normalizedDifficulty, timer, stage);
 
   return rpc('start_game', {
     p_category: category,

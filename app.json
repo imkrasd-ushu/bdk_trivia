@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "DK Bible Trivia",
+    "name": "BDK Trivia",
     "slug": "bdk-trivia",
     "scheme": "bdktrivia",
     "version": "1.0.0",
@@ -44,6 +44,12 @@
           "microphonePermission": false
         }
       ]
-    ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "1745ebb2-ebf4-4df3-afe0-025c9011eb3e"
+      }
+    }
   }
 }

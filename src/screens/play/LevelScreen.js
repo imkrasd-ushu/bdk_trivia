@@ -8,7 +8,7 @@ import Card from '../../components/Card';
 import Screen from '../../components/Screen';
 import { Heading, Eyebrow } from '../../components/Heading';
 import { LEVELS, TRIVIA_CATEGORIES, DEFAULT_CATEGORY, DEFAULT_QUESTION_TIMEOUT, QUESTION_TIMEOUT_OPTIONS, MODULE_LEVEL_COUNT, PASS_PERCENT_REQUIRED, COURSE_MODULES } from '../../config/constants';
-import { getAvailableCategories, getOfflineSyncStatus, syncCatalog } from '../../services/offlineService';
+import { getAvailableCategories, getOfflineSyncStatus, syncCatalog, syncPendingGames } from '../../services/offlineService';
 import { C } from '../../theme';
 import { createEmptyProgress, getModuleStageStatus, loadProgressForCategory, MODULE_SEQUENCE } from '../../utils/progression';
 
@@ -31,6 +31,7 @@ export default function LevelScreen() {
     setSyncMessage('');
     try {
       const catalog = await syncCatalog();
+      try { await syncPendingGames(); } catch { /* Keep the offline pack even if queued-game sync fails. */ }
       setCategories(catalog.categories);
       setSyncStatus(await getOfflineSyncStatus());
       if (showMessage) setSyncMessage(`Downloaded ${catalog.questions.length} published questions.`);

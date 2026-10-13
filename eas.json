@@ -1,0 +1,19 @@
+{
+  "cli": {
+    "version": ">= 19.0.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "preview": {
+      "distribution": "internal",
+      "environment": "preview",
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://jgwkrrklrvthvsoeaibf.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_oiiFDluQ-_cKUC4eQ55WWw_taSGLe5l"
+      }
+    }
+  }
+}

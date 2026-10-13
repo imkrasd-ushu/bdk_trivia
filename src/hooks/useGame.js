@@ -18,7 +18,7 @@ function reducer(state, action) {
   }
 }
 
-export default function useGame(level, timerOn, category, timeLimit = SECONDS_PER_QUESTION) {
+export default function useGame(level, timerOn, category, timeLimit = SECONDS_PER_QUESTION, stage = 1) {
   const [state, dispatch] = useReducer(reducer, buildInitialState(timeLimit));
   const stateRef = useRef(state);
   const locked = useRef(false);
@@ -28,7 +28,7 @@ export default function useGame(level, timerOn, category, timeLimit = SECONDS_PE
   useEffect(() => {
     let active = true;
     locked.current = false;
-    startGame(level, timerOn, category)
+    startGame(level, timerOn, category, stage)
       .then(result => {
         if (!active) return;
         if (result.error) dispatch({ type: 'error', message: 'This category does not have enough questions for this level yet. Try another category or level.' });
@@ -36,7 +36,7 @@ export default function useGame(level, timerOn, category, timeLimit = SECONDS_PE
       })
       .catch(error => { if (active) dispatch({ type: 'error', message: error.message }); });
     return () => { active = false; };
-  }, [level, timerOn, category, timeLimit]);
+  }, [level, timerOn, category, timeLimit, stage]);
 
   const answer = useCallback(async key => {
     if (locked.current) return;

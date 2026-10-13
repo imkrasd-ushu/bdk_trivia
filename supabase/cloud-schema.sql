@@ -203,6 +203,50 @@ begin
 end;
 $$;
 
+drop function if exists public.create_trivia_category(text, text);
+
+create function public.create_trivia_category(p_label text, p_icon text default '✦')
+returns public.trivia_categories
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_label text := trim(coalesce(p_label, ''));
+  v_key text;
+  v_category public.trivia_categories;
+begin
+  if auth.uid() is null or not exists (
+    select 1 from public.trivia_admins where user_id = auth.uid()
+  ) then
+    raise exception 'Administrator access required';
+  end if;
+
+  if v_label = '' then
+    raise exception 'Category name is required';
+  end if;
+
+  v_key := trim(both '_' from regexp_replace(lower(v_label), '[^a-z0-9]+', '_', 'g'));
+  if v_key = '' then
+    raise exception 'Category name must contain letters or numbers';
+  end if;
+
+  insert into public.trivia_categories (key, label, icon, sort_order)
+  values (
+    v_key,
+    v_label,
+    coalesce(nullif(trim(p_icon), ''), '✦'),
+    coalesce((select max(sort_order) + 1 from public.trivia_categories), 1)
+  )
+  returning * into v_category;
+
+  return v_category;
+end;
+$$;
+
+revoke all on function public.create_trivia_category(text, text) from public;
+grant execute on function public.create_trivia_category(text, text) to authenticated;
+
 create or replace function public.set_profile(p_nickname text, p_avatar text)
 returns jsonb
 language plpgsql
@@ -521,3 +565,5 @@ as $$
 $$;
 
 select public.seed_default_badges();
+
+notify pgrst, 'reload schema';

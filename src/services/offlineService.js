@@ -82,7 +82,7 @@ function toPlayableQuestion(question) {
   };
 }
 
-export async function startOfflineGame(category, difficulty, timer = true) {
+export async function startOfflineGame(category, difficulty, timer = true, stage = 1) {
   const catalog = await getCachedCatalog();
   const pool = (catalog?.questions || []).filter(row => row.category === category && row.difficulty === difficulty);
   if (pool.length < 10) throw new Error('Download at least 10 published questions for this category and level before playing offline.');
@@ -94,7 +94,7 @@ export async function startOfflineGame(category, difficulty, timer = true) {
   const questions = shuffled.slice(0, 10).map(toPlayableQuestion);
   const session_id = `offline:${Date.now()}:${Math.random().toString(36).slice(2)}`;
   const games = await readGames();
-  games.push({ id: session_id, category, difficulty, timer, questions: questions.map(row => row.id), answers: [], status: 'active' });
+  games.push({ id: session_id, category, difficulty, timer, stage: Number(stage) || 1, questions: questions.map(row => row.id), answers: [], status: 'active' });
   await writeGames(games);
   return { session_id, questions };
 }
@@ -146,6 +146,7 @@ export async function syncPendingGames() {
       p_category: game.category,
       p_difficulty: game.difficulty,
       p_timer: game.timer,
+      p_stage: game.stage,
       p_answers: game.answers.map(({ question_id, chosen_option, time_left }) => ({ question_id, chosen_option, time_left })),
     });
     if (error) continue;
