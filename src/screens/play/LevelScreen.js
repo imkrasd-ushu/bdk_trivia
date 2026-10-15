@@ -155,6 +155,7 @@ export default function LevelScreen() {
         <Switch value={timerEnabled} onValueChange={value => setTimerEnabled(value)} trackColor={{ true: C.green }} thumbColor="#fff" accessibilityLabel="Use a timed round" />
       </View>
       {timerEnabled && <View style={styles.optionRow}>{QUESTION_TIMEOUT_OPTIONS.map(seconds => <Pressable key={seconds} onPress={() => setTimerSeconds(seconds)} style={[styles.optionPill, timerSeconds === seconds && styles.optionPillActive]}><Text style={[styles.optionPillText, timerSeconds === seconds && styles.optionPillTextActive]}>{seconds}s</Text></Pressable>)}</View>}
+      <Button title="Play together" variant="sun" onPress={() => router.push({ pathname: '/duel', params: { category, module, timer: timerEnabled ? '1' : '0', timeLimit: String(timerSeconds) } })} style={{ marginTop: 14 }} />
       <Button title="Back" variant="soft" onPress={() => router.back()} style={{ marginTop: 14 }} />
     </Screen>
   );

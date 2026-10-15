@@ -43,7 +43,8 @@
           "cameraPermission": "Take a picture for a Bible trivia question.",
           "microphonePermission": false
         }
-      ]
+      ],
+      "expo-sharing"
     ],
     "extra": {
       "router": {},

@@ -8,17 +8,20 @@ import Host from '../../components/Host';
 import Screen from '../../components/Screen';
 import { ErrorText, Heading } from '../../components/Heading';
 import useGame from '../../hooks/useGame';
+import { finishDuelGame } from '../../services/duelService';
 import { finishGame, gameLessons } from '../../services/triviaService';
 import { HOST_MESSAGES, SECONDS_PER_QUESTION, DEFAULT_CATEGORY } from '../../config/constants';
 import { C } from '../../theme';
 import { recordLevelProgress } from '../../utils/progression';
+import { useAuth } from '../../context/AuthContext';
 
 export default function GameScreen() {
-  const { level = 'easy', stage = '1', timer = '1', category = DEFAULT_CATEGORY, timeLimit } = useLocalSearchParams();
+  const { level = 'easy', stage = '1', timer = '1', category = DEFAULT_CATEGORY, timeLimit, duelCode } = useLocalSearchParams();
   const timed = timer !== '0';
   const router = useRouter();
   const timeoutSeconds = Number(timeLimit || SECONDS_PER_QUESTION);
-  const { state, answer, next } = useGame(level, timed, category || undefined, timeoutSeconds, Number(stage) || 1);
+  const { session } = useAuth();
+  const { state, answer, next } = useGame(level, timed, category || undefined, timeoutSeconds, Number(stage) || 1, duelCode ? String(duelCode) : null);
   const [finishing, setFinishing] = useState(false);
   const question = state.qs[state.i];
   const feedback = state.feedback;
@@ -36,9 +39,15 @@ export default function GameScreen() {
 
   async function advance() {
     if (!isLast) return next();
+    let durationSeconds = Math.max(0, Math.round((Date.now() - state.startedAt) / 1000));
     setFinishing(true);
     try {
       const result = await finishGame(state.sid);
+      const duelResult = duelCode ? await finishDuelGame(state.sid) : null;
+      if (duelResult) {
+        const ownResult = duelResult.players?.find(player => player.user_id === session?.user?.id);
+        if (Number.isFinite(Number(ownResult?.elapsed_ms))) durationSeconds = Math.floor(Number(ownResult.elapsed_ms) / 1000);
+      }
       const lessons = await gameLessons(state.sid).catch(() => []);
       const stageNumber = Number(stage || 1);
       const totalQuestions = result.total || state.qs.length;
@@ -51,7 +60,7 @@ export default function GameScreen() {
         total: totalQuestions,
       });
       await AsyncStorage.multiSet([
-        ['bdk-last-result', JSON.stringify({ sid: state.sid, result, lessons, level, stage: stageNumber, timer, refs: state.refs, progression })],
+        ['bdk-last-result', JSON.stringify({ sid: state.sid, result, lessons, level, stage: stageNumber, timer, refs: state.refs, progression, durationSeconds, duelCode: duelCode ? String(duelCode) : null, duelResult, completedAt: new Date().toISOString() })],
         ['bdk-last-refs', JSON.stringify(state.refs)],
       ]);
       if (!result.saved) await AsyncStorage.setItem('bdk-pending', JSON.stringify({ sid: state.sid, score: result.score }));
@@ -70,6 +79,7 @@ export default function GameScreen() {
   }
 
   if (state.phase === 'error') return <Screen><ErrorText>{state.error}</ErrorText><Button title="Back to levels" onPress={() => router.replace('/levels')} style={{ marginTop: 16 }} /></Screen>;
+  if (state.phase === 'countdown') return <Screen><Card style={{ alignItems: 'center', padding: 24, marginTop: 40 }}><Text style={{ color: C.orange, fontSize: 12, fontWeight: '900' }}>MATCH STARTING</Text><Text style={{ color: C.green, fontSize: 72, fontWeight: '900', marginVertical: 8 }}>{state.countdown}</Text><Text style={styles.body}>Both players get the same questions. Get ready!</Text></Card></Screen>;
   if (!question) return <Screen><Text style={styles.loading}>Getting your questions ready…</Text></Screen>;
 
   const correctText = feedback && question.options.find(option => option.key === feedback.correct_option)?.text;

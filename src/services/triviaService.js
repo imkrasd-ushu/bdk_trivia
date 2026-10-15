@@ -1,6 +1,6 @@
 import { CATEGORY, normalizeDifficulty } from '../config/constants';
 import { rpc } from './supabase';
-import { answerOfflineGame, claimOfflineGame, finishOfflineGame, getCachedCatalog, getOfflineGameLessons, isOfflineSession, startOfflineGame, syncCatalog } from './offlineService';
+import { answerOfflineGame, claimOfflineGame, finishOfflineGame, getCachedCatalog, getOfflineGameLessons, getQuestionHistory, isOfflineSession, recordQuestionHistory, startOfflineGame, syncCatalog } from './offlineService';
 
 export async function startGame(difficulty, timer = true, category = CATEGORY, stage = 1) {
   const normalizedDifficulty = normalizeDifficulty(difficulty);
@@ -13,12 +13,16 @@ export async function startGame(difficulty, timer = true, category = CATEGORY, s
   }
   if (hasEnoughCachedQuestions()) return startOfflineGame(category, normalizedDifficulty, timer, stage);
 
-  return rpc('start_game', {
+  const excludedQuestions = await getQuestionHistory(category, normalizedDifficulty);
+  const result = await rpc('start_game', {
     p_category: category,
     p_difficulty: normalizedDifficulty,
     p_timer: timer,
     p_mode: 'solo',
+    p_excluded_questions: excludedQuestions,
   });
+  if (!result.error) await recordQuestionHistory(category, normalizedDifficulty, (result.questions || []).map(question => question.id));
+  return result;
 }
 
 export async function submitAnswer(session, question, chosen, timeLeft) {

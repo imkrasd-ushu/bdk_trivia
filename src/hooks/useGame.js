@@ -1,14 +1,17 @@
 import { useCallback, useEffect, useReducer, useRef } from 'react';
 import { SECONDS_PER_QUESTION } from '../config/constants';
+import { startDuelGame } from '../services/duelService';
 import { startGame, submitAnswer } from '../services/triviaService';
 
 function buildInitialState(timeLimit = SECONDS_PER_QUESTION) {
-  return { phase: 'loading', sid: null, qs: [], i: 0, score: 0, streak: 0, left: timeLimit, chosen: null, feedback: null, refs: [], error: null };
+  return { phase: 'loading', sid: null, qs: [], i: 0, score: 0, streak: 0, left: timeLimit, startedAt: null, countdown: 0, chosen: null, feedback: null, refs: [], error: null };
 }
 
 function reducer(state, action) {
   switch (action.type) {
-    case 'loaded': return { ...state, phase: 'playing', sid: action.sid, qs: action.qs, left: action.timeLimit ?? state.left };
+    case 'loaded': return { ...state, phase: action.countdown > 0 ? 'countdown' : 'playing', sid: action.sid, qs: action.qs, left: action.timeLimit ?? state.left, startedAt: action.startedAt, countdown: action.countdown || 0 };
+    case 'countdown': return { ...state, countdown: action.seconds };
+    case 'begin': return { ...state, phase: 'playing', countdown: 0 };
     case 'error': return { ...state, phase: 'error', error: action.message };
     case 'tick': return { ...state, left: Math.max(0, Number((state.left - 0.1).toFixed(1))) };
     case 'locked': return { ...state, phase: 'answering', chosen: action.key };
@@ -18,7 +21,7 @@ function reducer(state, action) {
   }
 }
 
-export default function useGame(level, timerOn, category, timeLimit = SECONDS_PER_QUESTION, stage = 1) {
+export default function useGame(level, timerOn, category, timeLimit = SECONDS_PER_QUESTION, stage = 1, duelCode = null) {
   const [state, dispatch] = useReducer(reducer, buildInitialState(timeLimit));
   const stateRef = useRef(state);
   const locked = useRef(false);
@@ -28,15 +31,31 @@ export default function useGame(level, timerOn, category, timeLimit = SECONDS_PE
   useEffect(() => {
     let active = true;
     locked.current = false;
-    startGame(level, timerOn, category, stage)
+    (duelCode ? startDuelGame(duelCode) : startGame(level, timerOn, category, stage))
       .then(result => {
         if (!active) return;
-        if (result.error) dispatch({ type: 'error', message: 'This category does not have enough questions for this level yet. Try another category or level.' });
-        else dispatch({ type: 'loaded', sid: result.session_id, qs: result.questions || [], timeLimit });
+        if (result.error) dispatch({ type: 'error', message: 'There are not enough unused questions left for this module. Update the quiz pack or choose another category.' });
+        else {
+          const startedAt = result.starts_at ? new Date(result.starts_at).getTime() : Date.now();
+          const countdown = Math.max(0, Math.ceil((startedAt - Date.now()) / 1000));
+          dispatch({ type: 'loaded', sid: result.session_id, qs: result.questions || [], timeLimit, startedAt, countdown });
+        }
       })
       .catch(error => { if (active) dispatch({ type: 'error', message: error.message }); });
     return () => { active = false; };
-  }, [level, timerOn, category, timeLimit, stage]);
+  }, [level, timerOn, category, timeLimit, stage, duelCode]);
+
+  useEffect(() => {
+    if (state.phase !== 'countdown' || !state.startedAt) return undefined;
+    const updateCountdown = () => {
+      const seconds = Math.max(0, Math.ceil((state.startedAt - Date.now()) / 1000));
+      if (!seconds) dispatch({ type: 'begin' });
+      else dispatch({ type: 'countdown', seconds });
+    };
+    updateCountdown();
+    const interval = setInterval(updateCountdown, 200);
+    return () => clearInterval(interval);
+  }, [state.phase, state.startedAt]);
 
   const answer = useCallback(async key => {
     if (locked.current) return;

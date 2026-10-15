@@ -5,6 +5,7 @@ import { supabase } from './supabase';
 
 const CATALOG_KEY = 'bdk-offline-catalog';
 const GAMES_KEY = 'bdk-offline-games';
+const QUESTION_HISTORY_KEY = 'bdk-question-history';
 const PAGE_SIZE = 500;
 let catalogSyncPromise;
 
@@ -63,6 +64,20 @@ async function writeGames(games) {
   await AsyncStorage.setItem(GAMES_KEY, JSON.stringify(games));
 }
 
+function questionHistoryKey(category, difficulty) {
+  return `${QUESTION_HISTORY_KEY}:${category}:${difficulty}`;
+}
+
+export async function getQuestionHistory(category, difficulty) {
+  const history = await readJson(questionHistoryKey(category, difficulty), []);
+  return Array.isArray(history) ? history : [];
+}
+
+export async function recordQuestionHistory(category, difficulty, questionIds) {
+  const history = await getQuestionHistory(category, difficulty);
+  await AsyncStorage.setItem(questionHistoryKey(category, difficulty), JSON.stringify([...new Set([...history, ...questionIds])]));
+}
+
 function toPlayableQuestion(question) {
   return {
     id: question.id,
@@ -85,8 +100,10 @@ function toPlayableQuestion(question) {
 export async function startOfflineGame(category, difficulty, timer = true, stage = 1) {
   const catalog = await getCachedCatalog();
   const pool = (catalog?.questions || []).filter(row => row.category === category && row.difficulty === difficulty);
-  if (pool.length < 10) throw new Error('Download at least 10 published questions for this category and level before playing offline.');
-  const shuffled = [...pool];
+  const history = await getQuestionHistory(category, difficulty);
+  const unseenPool = pool.filter(row => !history.includes(row.id));
+  if (unseenPool.length < 10) throw new Error('There are not enough unused questions left in this module. Update the quiz pack or choose another category.');
+  const shuffled = [...unseenPool];
   for (let index = shuffled.length - 1; index > 0; index -= 1) {
     const swapIndex = Math.floor(Math.random() * (index + 1));
     [shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]];
@@ -96,6 +113,7 @@ export async function startOfflineGame(category, difficulty, timer = true, stage
   const games = await readGames();
   games.push({ id: session_id, category, difficulty, timer, stage: Number(stage) || 1, questions: questions.map(row => row.id), answers: [], status: 'active' });
   await writeGames(games);
+  await recordQuestionHistory(category, difficulty, questions.map(row => row.id));
   return { session_id, questions };
 }
 
