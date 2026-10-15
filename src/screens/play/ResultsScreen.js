@@ -124,7 +124,7 @@ export default function ResultsScreen() {
       ? 'It’s a tie!'
       : duel.winner_user_id === session?.user?.id
         ? 'You won!'
-        : `${otherDuelPlayer?.nickname || 'The other player'} won`;
+        : `${otherDuelPlayer?.display_name || 'The other player'} won`;
   const messages = ['Every try helps you learn. Play again when you’re ready.', 'Good work. You learned something new.', 'Great job!', 'Fantastic Bible knowledge!'];
   return (
     <Screen>
@@ -160,7 +160,7 @@ export default function ResultsScreen() {
           <Text style={styles.duelOutcome}>{duelOutcome}</Text>
           {[ownDuelPlayer, otherDuelPlayer].filter(Boolean).map((player, index) => (
             <View key={player.user_id} style={styles.duelPlayerRow}>
-              <Text style={styles.duelPlayerName}>{index === 0 ? 'You' : player.nickname}</Text>
+              <Text style={styles.duelPlayerName}>{player.display_name}{index === 0 ? ' (you)' : ''}</Text>
               <Text style={styles.duelPlayerScore}>{player.score ?? 'Playing'} pts</Text>
               <Text style={styles.duelPlayerTime}>{player.elapsed_ms != null && Number.isFinite(Number(player.elapsed_ms)) ? formatDuelTime(player.elapsed_ms) : 'In progress'}</Text>
             </View>

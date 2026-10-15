@@ -1,7 +1,7 @@
 import { rpc } from './supabase';
 import { getQuestionHistory, recordQuestionHistory } from './offlineService';
 
-export async function createDuel(category, difficulty, timer, timeLimit) {
+export async function createDuel(category, difficulty, timer, timeLimit, displayName) {
   const excludedQuestions = await getQuestionHistory(category, difficulty);
   const duel = await rpc('create_trivia_duel', {
     p_category: category,
@@ -11,10 +11,11 @@ export async function createDuel(category, difficulty, timer, timeLimit) {
     p_excluded_questions: excludedQuestions,
   });
   await recordQuestionHistory(category, difficulty, duel.question_ids || []);
-  return duel;
+  const namedDuel = await rpc('set_trivia_duel_player_name', { p_code: duel.code, p_display_name: displayName });
+  return { ...duel, ...namedDuel };
 }
 
-export async function joinDuel(code) {
+export async function joinDuel(code, displayName) {
   let duel;
   try {
     duel = await rpc('join_trivia_duel', { p_code: code });
@@ -27,7 +28,8 @@ export async function joinDuel(code) {
     throw new Error(messages[error.message] || error.message);
   }
   await recordQuestionHistory(duel.category, duel.difficulty, duel.question_ids || []);
-  return duel;
+  const namedDuel = await rpc('set_trivia_duel_player_name', { p_code: duel.code, p_display_name: displayName });
+  return { ...duel, ...namedDuel };
 }
 
 export function getDuel(code) {

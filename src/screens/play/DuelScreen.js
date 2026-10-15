@@ -15,6 +15,7 @@ export default function DuelScreen() {
   const { session, configured } = useAuth();
   const { category = DEFAULT_CATEGORY, module = 'easy', timer = '1', timeLimit } = useLocalSearchParams();
   const [code, setCode] = useState('');
+  const [playerName, setPlayerName] = useState('');
   const [room, setRoom] = useState(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
@@ -57,7 +58,7 @@ export default function DuelScreen() {
     setBusy(true);
     setMessage('');
     try {
-      const created = await createDuel(String(category), String(module), timerEnabled, timeoutSeconds);
+      const created = await createDuel(String(category), String(module), timerEnabled, timeoutSeconds, playerName.trim());
       setCode(created.code);
       setRoom(created);
     } catch (error) {
@@ -71,7 +72,7 @@ export default function DuelScreen() {
     setBusy(true);
     setMessage('');
     try {
-      const joined = await joinDuel(code.trim().toUpperCase());
+      const joined = await joinDuel(code.trim().toUpperCase(), playerName.trim());
       setRoom(joined);
       setCode(joined.code);
     } catch (error) {
@@ -97,6 +98,7 @@ export default function DuelScreen() {
         <Card style={styles.roomCard}>
           <Text style={styles.roomTitle}>Your join code</Text>
           <Text selectable style={styles.code}>{room.code}</Text>
+          <Text style={styles.roomMeta}>Playing as {playerName.trim()}</Text>
           <Text style={styles.copy}>Share this code with the other player. The quiz starts for both players when they join.</Text>
           <Text style={styles.roomMeta}>{room.category} · {COURSE_MODULES[room.difficulty]?.label || room.difficulty}</Text>
           <Text style={styles.waiting}>Waiting for the other player…</Text>
@@ -104,10 +106,24 @@ export default function DuelScreen() {
       ) : (
         <>
           <Card>
+            <Text style={styles.section}>Your match name</Text>
+            <Text style={styles.copy}>Choose the name the other player will see in the results.</Text>
+            <TextInput
+              autoCapitalize="words"
+              autoCorrect={false}
+              maxLength={24}
+              value={playerName}
+              onChangeText={setPlayerName}
+              placeholder="Enter your name"
+              style={styles.nameInput}
+              accessibilityLabel="Your match display name"
+            />
+          </Card>
+          <Card>
             <Text style={styles.section}>Create a match</Text>
             <Text style={styles.copy}>Your friend will answer the same ten questions. The quiz begins together after they enter your code.</Text>
             <Text style={styles.roomMeta}>Selected: {category} · {COURSE_MODULES[module]?.label || module}</Text>
-            <Button title="Create join code" onPress={hostGame} loading={busy} style={{ marginTop: 12 }} />
+            <Button title="Create join code" onPress={hostGame} loading={busy} disabled={!playerName.trim()} style={{ marginTop: 12 }} />
           </Card>
           <Card>
             <Text style={styles.section}>Join a match</Text>
@@ -121,7 +137,7 @@ export default function DuelScreen() {
               style={styles.input}
               accessibilityLabel="Head-to-head join code"
             />
-            <Button title="Join match" variant="sun" onPress={enterGame} loading={busy} disabled={code.length !== 6} />
+            <Button title="Join match" variant="sun" onPress={enterGame} loading={busy} disabled={code.length !== 6 || !playerName.trim()} />
           </Card>
         </>
       )}
@@ -139,5 +155,6 @@ const styles = StyleSheet.create({
   roomMeta: { color: C.ink, fontWeight: '800', marginTop: 12, textTransform: 'capitalize' },
   waiting: { color: C.orange, fontWeight: '900', marginTop: 16 },
   section: { color: C.ink, fontSize: 17, fontWeight: '900' },
+  nameInput: { height: 50, borderWidth: 1, borderColor: C.line, borderRadius: 6, paddingHorizontal: 12, marginTop: 12, color: C.ink, fontSize: 17 },
   input: { height: 54, borderWidth: 1, borderColor: C.line, borderRadius: 6, paddingHorizontal: 14, marginTop: 14, marginBottom: 8, color: C.ink, fontSize: 22, fontWeight: '900', letterSpacing: 5, textAlign: 'center' },
 });
